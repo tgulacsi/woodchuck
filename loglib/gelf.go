@@ -35,6 +35,7 @@ func FromGelfJson(text []byte, m *Message) error {
 }
 
 func ListenGelfUdp(port int, ch chan<- *Message) error {
+	log.Printf("start listening on :%d", port)
 	r, err := gelf.NewReader(":" + strconv.Itoa(port))
 	if err != nil {
 		return err
@@ -50,5 +51,6 @@ func ListenGelfUdp(port int, ch chan<- *Message) error {
 		}
 		ch <- (*Message)(m)
 	}
+	log.Printf("stopped listening on :%d", port)
 	return nil
 }

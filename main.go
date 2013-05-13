@@ -9,7 +9,7 @@ import (
 var gelfUdpAddr = flag.Int("-g", 12201, "UDP listen port")
 
 func main() {
-	if err := loglib.LoadConfig("transports.toml", "filters.toml"); err != nil {
+	if err := loglib.LoadConfig("config.toml", "filters.toml"); err != nil {
 		log.Fatalf("error loading config: %s", err)
 	}
 	in := make(chan *loglib.Message)
@@ -30,6 +30,9 @@ func eventListener(in <-chan *loglib.Message) {
 					}
 				}
 			}
+		}
+		if loglib.StoreCh != nil {
+			loglib.StoreCh <- m
 		}
 		//log.Printf("got %#v", m)
 		if m.Level <= loglib.ERROR {
