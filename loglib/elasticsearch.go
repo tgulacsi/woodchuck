@@ -73,13 +73,13 @@ func (es ElasticSearch) Store(m *Message) (*esResponse, error) {
 	return esR, err
 }
 
-func storeEs(url string, ttld int) {
+func storeEs(url string, ttld int, in <-chan *Message) {
 	es := NewElasticSearch(url, ttld)
 	var (
 		resp *esResponse
 		err  error
 	)
-	for m := range StoreCh {
+	for m := range in {
 		if resp, err = es.Store(m); err != nil {
 			log.Printf("error storing message: %s", err)
 			continue

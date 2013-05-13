@@ -20,6 +20,9 @@
     [filters.cig]
     facility = "^cig[.]"
 
+    [filters.zaras]
+    facility = "[.]zaras$"
+
 [destinations]
     [destinations.wabard-email]
     email = ["wabard@example.com"]
@@ -56,3 +59,6 @@
     if = ["wabard", "prd", "error"]
     then = ["wabard-email", "wabard-ops-email", "wabard-ops-sms", "wabard-mantis"]
 
+    [rules.zaras-error]
+    if = ["zaras", "error"]
+    then = ["wabard-ops-email", "wabard-ops-sms", "wabard-mantis"]
