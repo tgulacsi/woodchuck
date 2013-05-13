@@ -27,7 +27,7 @@ type SMSSender interface {
 	Send(to, message string) error
 }
 type EmailSender interface {
-	Send(to, subject, body string) error
+	Send(to []string, subject string, body []byte) error
 }
 
 type Server struct {
@@ -45,7 +45,7 @@ func LoadConfig(transports, filters string) (s *Server, err error) {
 	if err = TransportConfig.Parse(transports); err != nil {
 		return
 	}
-    s = &Server{routines: make([]func(), 0, 4), in: make(chan *Message)}
+	s = &Server{routines: make([]func(), 0, 4), in: make(chan *Message)}
 	if *esUrl != "" {
 		log.Printf("starting storage goroutine for %s", *esUrl)
 		s.store = make(chan *Message)
@@ -54,7 +54,7 @@ func LoadConfig(transports, filters string) (s *Server, err error) {
 		})
 	}
 	if *twilioSid != "" {
-		s.SMS = NewTwilio(*from, *twilioSid, *twilioToken)
+		s.SMS = NewTwilio("+1 858-500-3858", *twilioSid, *twilioToken)
 	}
 	if *smtpHostport != "" {
 		s.Email = NewEmailSender(*from, *smtpHostport, *smtpAuth)

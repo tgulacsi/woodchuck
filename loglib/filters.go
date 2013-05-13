@@ -1,8 +1,10 @@
 package loglib
 
 import (
+	"errors"
 	"log"
 	"regexp"
+	"strings"
 )
 
 type Matcher interface {
@@ -122,31 +124,42 @@ func getList(tree ConfigTree, name string) (arr []string) {
 }
 
 type Alerter interface {
-	Send(m *Message) error
+	Send(*Message, SMSSender, EmailSender) error
 }
 
 type emailAlert struct {
 	To []string
 }
 
-func (a emailAlert) Send(m *Message) error {
-	panic("unimplemented send email")
+func (a emailAlert) Send(m *Message, sms SMSSender, email EmailSender) error {
+	return email.Send(a.To, m.String(), []byte(m.Long()))
 }
 
 type smsAlert struct {
 	To []string
 }
 
-func (a smsAlert) Send(m *Message) error {
-	panic("unimplemented send phone")
+func (a smsAlert) Send(m *Message, sms SMSSender, email EmailSender) error {
+	var err error
+	errs := make([]string, 0, len(a.To))
+	for _, to := range a.To {
+		if err = sms.Send(to, m.String()); err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+	if len(errs) == 0 {
+		return nil
+	}
+	return errors.New(strings.Join(errs, "\n"))
 }
 
 type mantisAlert struct {
 	Url string
 }
 
-func (a mantisAlert) Send(m *Message) error {
-	panic("unimplemented alert mantis")
+func (a mantisAlert) Send(m *Message, sms SMSSender, email EmailSender) error {
+	log.Printf("unimplemented alert mantis")
+	return nil
 }
 
 func BuildAlerters(tree ConfigTree) (destinations map[string]Alerter, err error) {
@@ -198,13 +211,20 @@ func (rul Rule) Match(m *Message) bool {
 	return true
 }
 
-func (rul Rule) Do(m *Message) (err error) {
+func (rul Rule) Do(m *Message, sms SMSSender, email EmailSender) (err error) {
+	if len(rul.Then) == 0 {
+		return
+	}
+	errs := make([]string, 0, len(rul.Then))
 	for _, al := range rul.Then {
-		if err = al.Send(m); err != nil {
-			return
+		if err = al.Send(m, sms, email); err != nil {
+			errs = append(errs, err.Error())
 		}
 	}
-	return nil
+	if len(errs) == 0 {
+		return nil
+	}
+	return errors.New(strings.Join(errs, "\n"))
 }
 
 func BuildRules(tree ConfigTree, matchers map[string]Matcher, alerters map[string]Alerter) (rules []Rule, err error) {
