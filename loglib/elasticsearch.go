@@ -9,6 +9,8 @@ import (
 	"strconv"
 )
 
+const ElasticSearchPathPrefix = "/woodchuck/gelf"
+
 var StoreCh chan *Message
 
 type ElasticSearch struct {
@@ -59,7 +61,7 @@ func (es ElasticSearch) Store(m *Message) (*esResponse, error) {
 	}
 	_, _ = buf.Write([]byte{'}'})
 	u := *es.Url
-	u.Path += "/woodchuck/gelf"
+	u.Path += ElasticSearchPathPrefix
 	if resp, err = es.client.Post(u.String(), "application/json",
 		bytes.NewReader(buf.Bytes())); err != nil {
 		return nil, err

@@ -1,0 +1,58 @@
+[filters]
+    [filters.dev]
+    host = "^p520([.]|$)"
+
+    [filters.tst]
+    host = "^(as|br)test([.]|$)"
+
+    [filters.prd]
+    host = "^(as|br)prod([.]|$)"
+
+    [filters.error]
+    level_lt = 3
+
+    [filters.wabard]
+    facility = "^wabard[.]"
+
+    [filters.kobe]
+    facility = "^kobe[.]"
+
+    [filters.cig]
+    facility = "^cig[.]"
+
+[destinations]
+    [destinations.wabard-email]
+    email = ["wabard@example.com"]
+    [destinations.kobe-email]
+    email = ["kobe@example.com"]
+    [destinations.cig-email]
+    email = ["cig@example.com"]
+
+    [destinations.wabard-ops-email]
+    email = ["boss@example.com", "cig@example.com", "minion@example.com"]
+    [destinations.wabard-ops-sms]
+    sms = ["+99999999"]
+    [destinations.wabard-mantis]
+    mantis = "https://www.example.com/mantis/wabard"
+
+    [destinations.kobe-ops-email]
+    email = ["boss@example.com", "kobe@example.com", "minion@example.com"]
+
+    [destinations.cig-ops-email]
+    email = ["boss@example.com", "l.megyesi@citromail.hu", "cig@example.com", "minion@example.com"]
+
+
+
+[rules]
+    [rules.kobe-error]
+    if = ["kobe", "error"]
+    then = ["kobe-email"]
+
+    [rules.wabard-error]
+    if = ["wabard", "error"]
+    then = ["wabard-email"]
+
+    [rules.wabard-prd-error]
+    if = ["wabard", "prd", "error"]
+    then = ["wabard-email", "wabard-ops-email", "wabard-ops-sms", "wabard-mantis"]
+
