@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -77,17 +78,15 @@ func ListenGelfUdp(port int, ch chan<- *Message) error {
 	for {
 		if gm, err = r.ReadMessage(); err != nil {
 			return fmt.Errorf("error reading message: %s", err)
-			log.Fatalf("error reading message: %s", err)
-			continue
 		}
 		ch <- AsMessage(gm)
 	}
-	log.Printf("stopped listening on :%d", port)
-	return nil
+	//log.Printf("stopped listening on :%d", port)
+	//return nil
 }
 
 var (
-	magicZlib = []byte{0x78}
+	magicZlib = []byte{0x78, 0x9c}
 	magicGzip = []byte{0x1f, 0x8b}
 )
 
@@ -97,10 +96,8 @@ func ListenGelfTcp(port int, ch chan<- *Message) error {
 	if err != nil {
 		return err
 	}
-	var (
-		gm *gelf.Message
-	)
 	handle := func(r io.ReadCloser) {
+		gm := &gelf.Message{}
 		defer r.Close()
 		if err = UnboxGelf(r, gm); err != nil {
 			log.Printf("error unboxing %s: %s", r, err)
@@ -116,24 +113,64 @@ func ListenGelfTcp(port int, ch chan<- *Message) error {
 		}
 		go handle(conn)
 	}
-	return nil
+	//return nil
 }
 
 func ListenGelfHttp(port int, ch chan<- *Message) error {
 	var (
-		gm *gelf.Message
+		rb  io.ReadCloser
+		b   []byte
+		i32 int
+		e   error
 	)
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		if r.Method != "POST" {
-			w.WriteHeader(400)
-			w.Write([]byte("only POST is acceptable"))
-			return
-		}
-		if err := UnboxGelf(r.Body, gm); err != nil {
-			w.WriteHeader(400)
-			w.Write([]byte(fmt.Sprintf("error unboxing gelf message: %s", err)))
-			return
+		gm := &gelf.Message{}
+		if r.URL != nil && r.URL.RawQuery != "" {
+			q := r.URL.Query()
+			gm.Version = q.Get("version")
+			gm.Host = q.Get("host")
+			gm.Short = q.Get("short_message")
+			s := q.Get("timestamp")
+			if s != "" {
+				i := strings.Index(s, ".")
+				if i > 0 {
+					s = s[:i]
+				}
+				if gm.TimeUnix, e = strconv.ParseInt(s, 10, 64); e != nil {
+					log.Printf("error parsing timestamp %s", s)
+				}
+			}
+			if i32, e = strconv.Atoi(q.Get("level")); e != nil {
+				log.Printf("error parsing level %s", q.Get("level"))
+			} else {
+				gm.Level = int32(i32)
+			}
+			gm.Facility = q.Get("facility")
+			gm.File = q.Get("file")
+			if gm.Line, e = strconv.Atoi(q.Get("line")); e != nil {
+				log.Printf("error parsing line %s", q.Get("line"))
+			}
+			for k, v := range q {
+				if k[0] == '_' {
+					if gm.Extra == nil {
+						gm.Extra = make(map[string]interface{}, len(q))
+					}
+					gm.Extra[k] = v
+				}
+			}
+			if r.Method == "POST" {
+				if rb, e = decompress(r.Body); e != nil {
+					log.Printf("error decompressing body: %s", e)
+				}
+				b, e = ioutil.ReadAll(rb)
+				rb.Close()
+				r.Body.Close()
+				if e != nil {
+					log.Printf("error reading body: %s", e)
+				}
+				gm.Full = string(b)
+			}
 		}
 		w.WriteHeader(201)
 		w.Write([]byte{})
@@ -157,6 +194,8 @@ func decompress(r io.Reader) (rc io.ReadCloser, err error) {
 		rc, err = gzip.NewReader(br)
 	} else if bytes.Equal(head[:len(magicZlib)], magicZlib) {
 		rc, err = zlib.NewReader(br)
+	} else {
+		log.Printf("WARN not compressed? %x", head)
 	}
 	return
 }

@@ -102,6 +102,9 @@ func Call(uri, username, password, name string, args ...interface{}) (
 	b := buf.Bytes()[:n]
 	log.Printf("got\n%s", b)
 	i := bytes.Index(b, []byte("<?"))
+	if i < 0 {
+		return nil, nil, io.EOF
+	}
 	_, v, f, e := xmlrpc.Unmarshal(bytes.NewReader(b[i:]))
 	return v, f, e
 }
