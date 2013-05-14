@@ -80,7 +80,7 @@ func LoadConfig(transports, filters string) (s *Server, err error) {
 	if *smtpHostport != "" {
 		s.email = NewEmailSender(*from, *smtpHostport, *smtpAuth)
 	}
-    s.mantis = NewMantisSender(*mantisXmlrpc)
+	s.mantis = NewMantisSender()
 	if *gelfUdpPort > 0 {
 		s.routines = append(s.routines, func() {
 			ListenGelfUdp(*gelfUdpPort, s.in)

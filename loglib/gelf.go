@@ -55,7 +55,7 @@ func (m *Message) UnmarshalJSON(data []byte) error {
 }
 func (m *Message) String() string {
 	return fmt.Sprintf("%s %s@%s: %s %s", LevelNames[m.Level], m.Facility, m.Host,
-    m.Short, time.Unix(m.TimeUnix, 0).Format(time.RFC3339))
+		m.Short, time.Unix(m.TimeUnix, 0).Format(time.RFC3339))
 }
 func (m *Message) Long() string {
 	return fmt.Sprintf("%s\n%s:%d\n\n%s", m.String(), m.File, m.Line, m.Full)
