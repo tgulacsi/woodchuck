@@ -124,26 +124,26 @@ func getList(tree ConfigTree, name string) (arr []string) {
 }
 
 type Alerter interface {
-	Send(*Message, SMSSender, EmailSender) error
+	Send(*Message, SenderProvider) error
 }
 
 type emailAlert struct {
 	To []string
 }
 
-func (a emailAlert) Send(m *Message, sms SMSSender, email EmailSender) error {
-	return email.Send(a.To, m.String(), []byte(m.Long()))
+func (a emailAlert) Send(m *Message, s SenderProvider) error {
+	return s.GetEmailSender().Send(a.To, m.String(), []byte(m.Long()))
 }
 
 type smsAlert struct {
 	To []string
 }
 
-func (a smsAlert) Send(m *Message, sms SMSSender, email EmailSender) error {
+func (a smsAlert) Send(m *Message, s SenderProvider) error {
 	var err error
 	errs := make([]string, 0, len(a.To))
 	for _, to := range a.To {
-		if err = sms.Send(to, m.String()); err != nil {
+		if err = s.GetSMSSender().Send(to, m.String()); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
@@ -154,12 +154,15 @@ func (a smsAlert) Send(m *Message, sms SMSSender, email EmailSender) error {
 }
 
 type mantisAlert struct {
-	Url string
+	Uri string
 }
 
-func (a mantisAlert) Send(m *Message, sms SMSSender, email EmailSender) error {
-	log.Printf("unimplemented alert mantis")
-	return nil
+func (a mantisAlert) Send(m *Message, s SenderProvider) error {
+	id, err := s.GetMantisSender().Send(a.Uri, m.String(), m.Long())
+	if err == nil {
+		log.Printf("created Mantis issue %d", id)
+	}
+	return err
 }
 
 func BuildAlerters(tree ConfigTree) (destinations map[string]Alerter, err error) {
@@ -187,7 +190,7 @@ func BuildAlerters(tree ConfigTree) (destinations map[string]Alerter, err error)
 			continue
 		}
 		v = sub.Get("mantis")
-		destinations[k] = mantisAlert{Url: v.(string)}
+		destinations[k] = mantisAlert{Uri: v.(string)}
 	}
 	return
 }
@@ -211,13 +214,13 @@ func (rul Rule) Match(m *Message) bool {
 	return true
 }
 
-func (rul Rule) Do(m *Message, sms SMSSender, email EmailSender) (err error) {
+func (rul Rule) Do(m *Message, s SenderProvider) (err error) {
 	if len(rul.Then) == 0 {
 		return
 	}
 	errs := make([]string, 0, len(rul.Then))
 	for _, al := range rul.Then {
-		if err = al.Send(m, sms, email); err != nil {
+		if err = al.Send(m, s); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}

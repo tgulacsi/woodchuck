@@ -19,6 +19,8 @@ var (
 	smtpHostport = TransportConfig.String("smtp.hostport", ":25")
 	smtpAuth     = TransportConfig.String("smtp.auth", "")
 
+	mantisXmlrpc = TransportConfig.String("mantis.xmlrpc", "xmlrpc_vv.php")
+
 	esUrl = TransportConfig.String("elasticsearch.url", "http://localhost:9200")
 	esTTL = TransportConfig.Int("elasticsearch.ttl", 90)
 )
@@ -29,15 +31,34 @@ type SMSSender interface {
 type EmailSender interface {
 	Send(to []string, subject string, body []byte) error
 }
+type MantisSender interface {
+	Send(uri, subject, body string) (int, error)
+}
+type SenderProvider interface {
+	GetSMSSender() SMSSender
+	GetEmailSender() EmailSender
+	GetMantisSender() MantisSender
+}
 
 type Server struct {
 	in, store chan *Message
-	SMS       SMSSender
-	Email     EmailSender
+	sms       SMSSender
+	email     EmailSender
+	mantis    MantisSender
 	Rules     []Rule
 	Matchers  map[string]Matcher
 	Alerters  map[string]Alerter
 	routines  []func()
+}
+
+func (s Server) GetSMSSender() SMSSender {
+	return s.sms
+}
+func (s Server) GetEmailSender() EmailSender {
+	return s.email
+}
+func (s Server) GetMantisSender() MantisSender {
+	return s.mantis
 }
 
 func LoadConfig(transports, filters string) (s *Server, err error) {
@@ -54,11 +75,12 @@ func LoadConfig(transports, filters string) (s *Server, err error) {
 		})
 	}
 	if *twilioSid != "" {
-		s.SMS = NewTwilio("+1 858-500-3858", *twilioSid, *twilioToken)
+		s.sms = NewTwilio("+1 858-500-3858", *twilioSid, *twilioToken)
 	}
 	if *smtpHostport != "" {
-		s.Email = NewEmailSender(*from, *smtpHostport, *smtpAuth)
+		s.email = NewEmailSender(*from, *smtpHostport, *smtpAuth)
 	}
+    s.mantis = NewMantisSender(*mantisXmlrpc)
 	if *gelfUdpPort > 0 {
 		s.routines = append(s.routines, func() {
 			ListenGelfUdp(*gelfUdpPort, s.in)

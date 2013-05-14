@@ -29,7 +29,7 @@ func (s *Server) Serve() {
 		for _, rule = range s.Rules {
 			if rule.Match(m) {
 				log.Printf("rule %s matches %s", rule, m)
-				if err = rule.Do(m, s.SMS, s.Email); err != nil {
+				if err = rule.Do(m, s); err != nil {
 					log.Printf("error doing %s: %s", rule, err)
 				}
 			}
