@@ -15,6 +15,11 @@ type mantisSender struct {
 	callers map[string]callFunc
 }
 
+// returns a new Mantis sender
+func NewMantisSender() (ms *mantisSender) {
+	return &mantisSender{callers: make(map[string]callFunc, 4)}
+}
+
 // splits url, gets username/password and project and category
 func splitUrl(uri string) (mantisUrl, projectName, category, username, password string, err error) {
 	u, e := url.Parse(uri)
@@ -61,11 +66,6 @@ func (ms *mantisSender) Send(uri, subject, body string) (int, error) {
 		}
 	}
 	return call(subject, body)
-}
-
-// returns a new Mantis sender
-func NewMantisSender() (ms *mantisSender) {
-	return &mantisSender{callers: make(map[string]callFunc, 4)}
 }
 
 // xmlrpc.Call, but without gzip and Basic Auth and strips non-xml

@@ -10,11 +10,6 @@ type emailSender struct {
 	auth           smtp.Auth
 }
 
-func (es emailSender) Send(to []string, subject string, body []byte) error {
-	return smtp.SendMail(es.hostport, es.auth, es.from,
-		to, body)
-}
-
 func NewEmailSender(from, hostport, auth string) (es emailSender) {
 	host := hostport
 	if i := strings.Index(hostport, ":"); i >= 0 {
@@ -30,4 +25,10 @@ func NewEmailSender(from, hostport, auth string) (es emailSender) {
 		es.auth = smtp.PlainAuth("", username, password, host)
 	}
 	return es
+}
+
+// sends email to the specified addresses
+func (es emailSender) Send(to []string, subject string, body []byte) error {
+	return smtp.SendMail(es.hostport, es.auth, es.from,
+		to, body)
 }

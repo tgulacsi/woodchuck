@@ -132,7 +132,11 @@ type emailAlert struct {
 }
 
 func (a emailAlert) Send(m *Message, s SenderProvider) error {
-	return s.GetEmailSender().Send(a.To, m.String(), []byte(m.Long()))
+	sender := s.GetEmailSender(strings.Join(a.To, ";") + "#" + m.String())
+	if sender != nil {
+		return sender.Send(a.To, m.String(), []byte(m.Long()))
+	}
+	return nil
 }
 
 type smsAlert struct {
@@ -143,7 +147,11 @@ func (a smsAlert) Send(m *Message, s SenderProvider) error {
 	var err error
 	errs := make([]string, 0, len(a.To))
 	for _, to := range a.To {
-		if err = s.GetSMSSender().Send(to, m.String()); err != nil {
+		sender := s.GetSMSSender(to + "#" + m.String())
+		if sender == nil {
+			continue
+		}
+		if err = sender.Send(to, m.String()); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
@@ -158,7 +166,11 @@ type mantisAlert struct {
 }
 
 func (a mantisAlert) Send(m *Message, s SenderProvider) error {
-	id, err := s.GetMantisSender().Send(a.Uri, m.String(), m.Long())
+	sender := s.GetMantisSender(a.Uri + "#" + m.String())
+	if sender == nil {
+		return nil
+	}
+	id, err := sender.Send(a.Uri, m.String(), m.Long())
 	if err == nil {
 		log.Printf("created Mantis issue %d", id)
 	}

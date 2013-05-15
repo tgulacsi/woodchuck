@@ -66,6 +66,7 @@ func (es ElasticSearch) Store(m *Message) (*esResponse, error) {
 		bytes.NewReader(buf.Bytes())); err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	esR := new(esResponse)
 	if err = json.NewDecoder(resp.Body).Decode(esR); err != nil {
 		return esR, err

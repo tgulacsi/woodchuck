@@ -55,11 +55,12 @@ func (m *Message) UnmarshalJSON(data []byte) error {
 	return ((*gelf.Message)(m)).UnmarshalJSON(data)
 }
 func (m *Message) String() string {
-	return fmt.Sprintf("%s %s@%s: %s %s", LevelNames[m.Level], m.Facility, m.Host,
-		m.Short, time.Unix(m.TimeUnix, 0).Format(time.RFC3339))
+	return fmt.Sprintf("%s %s@%s: %s", LevelNames[m.Level], m.Facility, m.Host,
+		m.Short)
 }
 func (m *Message) Long() string {
-	return fmt.Sprintf("%s\n%s:%d\n\n%s", m.String(), m.File, m.Line, m.Full)
+	return fmt.Sprintf("%s\n%s\n%s:%d\n\n%s", m.String(),
+		time.Unix(m.TimeUnix, 0).Format(time.RFC3339), m.File, m.Line, m.Full)
 }
 
 func FromGelfJson(text []byte, m *Message) error {
@@ -127,6 +128,9 @@ func ListenGelfHttp(port int, ch chan<- *Message) error {
 		w.Header().Set("Content-Type", "text/plain")
 		gm := &gelf.Message{}
 		if r.URL != nil && r.URL.RawQuery != "" {
+			if r.Body != nil {
+				defer r.Body.Close()
+			}
 			q := r.URL.Query()
 			gm.Version = q.Get("version")
 			gm.Host = q.Get("host")
@@ -165,7 +169,6 @@ func ListenGelfHttp(port int, ch chan<- *Message) error {
 				}
 				b, e = ioutil.ReadAll(rb)
 				rb.Close()
-				r.Body.Close()
 				if e != nil {
 					log.Printf("error reading body: %s", e)
 				}

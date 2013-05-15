@@ -4,6 +4,7 @@ import (
 	"github.com/pelletier/go-toml"
 	"github.com/stvp/go-toml-config"
 	"log"
+	"time"
 )
 
 var (
@@ -15,11 +16,14 @@ var (
 
 	twilioSid   = TransportConfig.String("twilio.sid", "")
 	twilioToken = TransportConfig.String("twilio.token", "")
+	twilioRate  = TransportConfig.Int("twilio.rate", 1800)
 
 	smtpHostport = TransportConfig.String("smtp.hostport", ":25")
 	smtpAuth     = TransportConfig.String("smtp.auth", "")
+	smtpRate     = TransportConfig.Int("smtp.rate", 600)
 
 	mantisXmlrpc = TransportConfig.String("mantis.xmlrpc", "xmlrpc_vv.php")
+	mantisRate   = TransportConfig.Int("mantis.rate", 3600)
 
 	esUrl = TransportConfig.String("elasticsearch.url", "http://localhost:9200")
 	esTTL = TransportConfig.Int("elasticsearch.ttl", 90)
@@ -35,9 +39,9 @@ type MantisSender interface {
 	Send(uri, subject, body string) (int, error)
 }
 type SenderProvider interface {
-	GetSMSSender() SMSSender
-	GetEmailSender() EmailSender
-	GetMantisSender() MantisSender
+	GetSMSSender(string) SMSSender
+	GetEmailSender(string) EmailSender
+	GetMantisSender(string) MantisSender
 }
 
 type Server struct {
@@ -49,15 +53,28 @@ type Server struct {
 	Matchers  map[string]Matcher
 	Alerters  map[string]Alerter
 	routines  []func()
+	rates     struct {
+		limiter            RateLimiter
+		sms, email, mantis time.Duration
+	}
 }
 
-func (s Server) GetSMSSender() SMSSender {
+func (s Server) GetSMSSender(txt string) SMSSender {
+	if s.rates.limiter != nil && s.rates.sms > 0 && !s.rates.limiter.Put(s.rates.sms, txt) {
+		return nil
+	}
 	return s.sms
 }
-func (s Server) GetEmailSender() EmailSender {
+func (s Server) GetEmailSender(txt string) EmailSender {
+	if s.rates.limiter != nil && s.rates.email > 0 && !s.rates.limiter.Put(s.rates.email, txt) {
+		return nil
+	}
 	return s.email
 }
-func (s Server) GetMantisSender() MantisSender {
+func (s Server) GetMantisSender(txt string) MantisSender {
+	if s.rates.limiter != nil && s.rates.mantis > 0 && !s.rates.limiter.Put(s.rates.mantis, txt) {
+		return nil
+	}
 	return s.mantis
 }
 
@@ -67,6 +84,7 @@ func LoadConfig(transports, filters string) (s *Server, err error) {
 		return
 	}
 	s = &Server{routines: make([]func(), 0, 4), in: make(chan *Message)}
+	s.rates.limiter = NewRateLimiter(time.Hour)
 	if *esUrl != "" {
 		log.Printf("starting storage goroutine for %s", *esUrl)
 		s.store = make(chan *Message)
@@ -76,11 +94,14 @@ func LoadConfig(transports, filters string) (s *Server, err error) {
 	}
 	if *twilioSid != "" {
 		s.sms = NewTwilio("+1 858-500-3858", *twilioSid, *twilioToken)
+		s.rates.sms = time.Duration(*twilioRate) * time.Second
 	}
 	if *smtpHostport != "" {
 		s.email = NewEmailSender(*from, *smtpHostport, *smtpAuth)
+		s.rates.email = time.Duration(*smtpRate) * time.Second
 	}
 	s.mantis = NewMantisSender()
+	s.rates.mantis = time.Duration(*mantisRate) * time.Second
 	if *gelfUdpPort > 0 {
 		s.routines = append(s.routines, func() {
 			ListenGelfUdp(*gelfUdpPort, s.in)
