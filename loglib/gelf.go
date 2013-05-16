@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -118,68 +119,88 @@ func ListenGelfTcp(port int, ch chan<- *Message) error {
 	return nil
 }
 
+// curl -v -F timestamp=$(date '+%s') -F short=abraka -F host=$(hostname) -F full=dabra -F facility=proba -F level=6 http://unowebprd:12203/
 func ListenGelfHttp(port int, ch chan<- *Message) error {
 	var (
-		rb  io.ReadCloser
-		b   []byte
-		i32 int
-		e   error
+		rb io.ReadCloser
+		b  []byte
+		e  error
+		ok bool
 	)
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		gm := &gelf.Message{}
+		var gm *gelf.Message
+		ok = false
+		if r.Body != nil {
+			defer r.Body.Close()
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		parsErr := func(err error) {
+			ok = false
+			w.WriteHeader(400)
+			w.Write([]byte(err.Error()))
+			w.Write([]byte{'\n'})
+		}
 		if r.URL != nil && r.URL.RawQuery != "" {
-			if r.Body != nil {
-				defer r.Body.Close()
-			}
-			q := r.URL.Query()
-			gm.Version = q.Get("version")
-			gm.Host = q.Get("host")
-			gm.Short = q.Get("short_message")
-			s := q.Get("timestamp")
-			if s != "" {
-				i := strings.Index(s, ".")
-				if i > 0 {
-					s = s[:i]
-				}
-				if gm.TimeUnix, e = strconv.ParseInt(s, 10, 64); e != nil {
-					log.Printf("error parsing timestamp %s", s)
-				}
-			}
-			if i32, e = strconv.Atoi(q.Get("level")); e != nil {
-				log.Printf("error parsing level %s", q.Get("level"))
-			} else {
-				gm.Level = int32(i32)
-			}
-			gm.Facility = q.Get("facility")
-			gm.File = q.Get("file")
-			if gm.Line, e = strconv.Atoi(q.Get("line")); e != nil {
-				log.Printf("error parsing line %s", q.Get("line"))
-			}
-			for k, v := range q {
-				if k[0] == '_' {
-					if gm.Extra == nil {
-						gm.Extra = make(map[string]interface{}, len(q))
-					}
-					gm.Extra[k] = v
-				}
+			gm = &gelf.Message{}
+			if e = parseValues(r.URL.Query(), gm); e != nil {
+				parsErr(e)
 			}
 			if r.Method == "POST" {
 				if rb, e = decompress(r.Body); e != nil {
-					log.Printf("error decompressing body: %s", e)
+					parsErr(fmt.Errorf("error decompressing body: %s", e))
 				} else {
 					b, e = ioutil.ReadAll(rb)
 					rb.Close()
 					if e != nil {
-						log.Printf("error reading body: %s", e)
+						parsErr(fmt.Errorf("error reading body: %s", e))
+					} else {
+						gm.Full = string(b)
+						ok = true
 					}
-					gm.Full = string(b)
 				}
 			}
+		} else {
+			if r.Method != "POST" && r.Method != "PUT" {
+				parsErr(fmt.Errorf("POST needed!"))
+			} else {
+				gm = &gelf.Message{}
+				rb = nil
+				s := r.FormValue("full")
+				if s != "" {
+					if rb, e = decompress(bytes.NewReader([]byte(s))); e != nil {
+						parsErr(fmt.Errorf("error decompressing full: %s", e))
+					}
+				} else {
+					if mpf, _, e := r.FormFile("full"); e != nil {
+						parsErr(e)
+					} else {
+						if rb, e = decompress(mpf); e != nil {
+							parsErr(fmt.Errorf("error decompressing full file: %s", e))
+						}
+					}
+				}
+				if rb != nil && e == nil {
+					b, e = ioutil.ReadAll(rb)
+					rb.Close()
+					if e != nil {
+						parsErr(fmt.Errorf("error reading full: %s", e))
+					} else {
+						gm.Full = string(b)
+					}
+				}
+				if e = parseValues(r.Form, gm); e != nil {
+					parsErr(e)
+				}
+				ok = true
+			}
 		}
-		w.WriteHeader(201)
-		w.Write([]byte{})
-		ch <- AsMessage(gm)
+		if ok {
+			w.WriteHeader(201)
+			w.Write([]byte{})
+			if gm != nil && gm.Facility != "" {
+				ch <- AsMessage(gm)
+			}
+		}
 		return
 	}
 	s := &http.Server{Addr: ":" + strconv.Itoa(port), Handler: http.HandlerFunc(handler)}
@@ -188,11 +209,56 @@ func ListenGelfHttp(port int, ch chan<- *Message) error {
 	return nil
 }
 
+func parseValues(q url.Values, gm *gelf.Message) (err error) {
+	gm.Version = q.Get("version")
+	gm.Host = q.Get("host")
+	gm.Short = q.Get("short")
+	s := q.Get("timestamp")
+	if s != "" {
+		i := strings.Index(s, ".")
+		if i > 0 {
+			s = s[:i]
+		}
+		if gm.TimeUnix, err = strconv.ParseInt(s, 10, 64); err != nil {
+			return fmt.Errorf("error parsing timestamp %s: %s", s, err)
+		}
+	}
+	var i32 int
+	s = q.Get("level")
+	if s != "" {
+		if i32, err = strconv.Atoi(s); err != nil {
+			return fmt.Errorf("error parsing level %s: %s", q.Get("level"), err)
+		} else {
+			gm.Level = int32(i32)
+		}
+	}
+	gm.Facility = q.Get("facility")
+	gm.File = q.Get("file")
+	s = q.Get("line")
+	if s != "" {
+		if gm.Line, err = strconv.Atoi(s); err != nil {
+			return fmt.Errorf("error parsing line %s: %s", q.Get("line"), err)
+		}
+	}
+	for k, v := range q {
+		if k[0] == '_' {
+			if gm.Extra == nil {
+				gm.Extra = make(map[string]interface{}, len(q))
+			}
+			gm.Extra[k] = v
+		}
+	}
+	return nil
+}
+
 func decompress(r io.Reader) (rc io.ReadCloser, err error) {
 	br := bufio.NewReader(r)
 	var head []byte
 	rc, err = ioutil.NopCloser(br), nil
 	if head, err = br.Peek(2); err != nil {
+		if err == io.EOF {
+			return ioutil.NopCloser(bytes.NewReader(nil)), nil
+		}
 		err = fmt.Errorf("cannot peek into %s: %s", r, err)
 		return
 	}
