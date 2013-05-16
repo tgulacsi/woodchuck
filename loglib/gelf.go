@@ -82,7 +82,7 @@ func ListenGelfUdp(port int, ch chan<- *Message) error {
 		}
 		ch <- AsMessage(gm)
 	}
-	//log.Printf("stopped listening on :%d", port)
+	log.Fatalf("stopped listening UDP on %d", port)
 	//return nil
 }
 
@@ -114,6 +114,7 @@ func ListenGelfTcp(port int, ch chan<- *Message) error {
 		}
 		go handle(conn)
 	}
+	log.Fatalf("End listening TCP on %d", port)
 	//return nil
 }
 
@@ -182,6 +183,7 @@ func ListenGelfHttp(port int, ch chan<- *Message) error {
 	}
 	s := &http.Server{Addr: ":" + strconv.Itoa(port), Handler: http.HandlerFunc(handler)}
 	s.ListenAndServe()
+	log.Fatalf("end listening HTTP on port %d", port)
 	return nil
 }
 
@@ -203,13 +205,15 @@ func decompress(r io.Reader) (rc io.ReadCloser, err error) {
 	return
 }
 
-func UnboxGelf(r io.ReadCloser, m *gelf.Message) (err error) {
-	if r, err = decompress(r); err != nil {
-		r.Close()
+func UnboxGelf(rc io.ReadCloser, m *gelf.Message) (err error) {
+	var r io.ReadCloser
+	if r, err = decompress(rc); err != nil {
+		rc.Close()
 		return
 	}
 	err = json.NewDecoder(r).Decode(m)
 	r.Close()
+	rc.Close()
 	return err
 }
 
