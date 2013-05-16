@@ -83,7 +83,7 @@ func ListenGelfUdp(port int, ch chan<- *Message) error {
 		ch <- AsMessage(gm)
 	}
 	log.Fatalf("stopped listening UDP on %d", port)
-	//return nil
+	return nil
 }
 
 var (
@@ -115,7 +115,7 @@ func ListenGelfTcp(port int, ch chan<- *Message) error {
 		go handle(conn)
 	}
 	log.Fatalf("End listening TCP on %d", port)
-	//return nil
+	return nil
 }
 
 func ListenGelfHttp(port int, ch chan<- *Message) error {
@@ -167,13 +167,14 @@ func ListenGelfHttp(port int, ch chan<- *Message) error {
 			if r.Method == "POST" {
 				if rb, e = decompress(r.Body); e != nil {
 					log.Printf("error decompressing body: %s", e)
+				} else {
+					b, e = ioutil.ReadAll(rb)
+					rb.Close()
+					if e != nil {
+						log.Printf("error reading body: %s", e)
+					}
+					gm.Full = string(b)
 				}
-				b, e = ioutil.ReadAll(rb)
-				rb.Close()
-				if e != nil {
-					log.Printf("error reading body: %s", e)
-				}
-				gm.Full = string(b)
 			}
 		}
 		w.WriteHeader(201)
@@ -190,11 +191,11 @@ func ListenGelfHttp(port int, ch chan<- *Message) error {
 func decompress(r io.Reader) (rc io.ReadCloser, err error) {
 	br := bufio.NewReader(r)
 	var head []byte
+	rc, err = ioutil.NopCloser(br), nil
 	if head, err = br.Peek(2); err != nil {
-		log.Printf("cannot peek into %s: %s", r, err)
+		err = fmt.Errorf("cannot peek into %s: %s", r, err)
 		return
 	}
-	rc, err = ioutil.NopCloser(br), nil
 	if bytes.Equal(head[:len(magicGzip)], magicGzip) {
 		rc, err = gzip.NewReader(br)
 	} else if bytes.Equal(head[:len(magicZlib)], magicZlib) {
