@@ -1,18 +1,7 @@
-/*
-   Copyright 2013 Tamás Gulácsi
+// Copyright 2013 Tamás Gulácsi. All rights reserved.
+// Use of this source code is governed by an Apache 2.0
+// license that can be found in the LICENSE file.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
 package loglib
 
 import (
@@ -33,9 +22,9 @@ import (
 	"strings"
 )
 
-// listen on the given UDP port for possibly chunked GELF messages
+// ListenGelfUDP listens on the given UDP port for possibly chunked GELF messages
 // put every complete message into the channel
-func ListenGelfUdp(port int, ch chan<- *Message) error {
+func ListenGelfUDP(port int, ch chan<- *Message) error {
 	log.Printf("start listening on :%d", port)
 	r, err := gelf.NewReader(":" + strconv.Itoa(port))
 	if err != nil {
@@ -57,9 +46,9 @@ var (
 	magicGzip = []byte{0x1f, 0x8b}
 )
 
-// listen on the given TCP port for full, possibly compressed GELF messages
-// put every message into the channel
-func ListenGelfTcp(port int, ch chan<- *Message) error {
+// ListenGelfTCP listen on the given TCP port for full, possibly compressed
+// GELF messages put every message into the channel
+func ListenGelfTCP(port int, ch chan<- *Message) error {
 	log.Printf("start listening on :%d", port)
 	ln, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
@@ -86,9 +75,10 @@ func ListenGelfTcp(port int, ch chan<- *Message) error {
 	return nil
 }
 
-// listhen on the given HTTP port for multipart/form POST requests such as
+// ListenGelfHTTP listens on the given HTTP port for multipart/form POST
+// requests such as
 // curl -v -F timestamp=$(date '+%s') -F short=abraka -F host=$(hostname) -F full=dabra -F facility=proba -F level=6 http://unowebprd:12203/
-func ListenGelfHttp(port int, ch chan<- *Message) error {
+func ListenGelfHTTP(port int, ch chan<- *Message) error {
 	var (
 		rb io.ReadCloser
 		b  []byte
@@ -176,9 +166,8 @@ func parseValues(q url.Values, gm *gelf.Message) (err error) {
 	if s != "" {
 		if i32, err = strconv.Atoi(s); err != nil {
 			return fmt.Errorf("error parsing level %s: %s", q.Get("level"), err)
-		} else {
-			gm.Level = int32(i32)
 		}
+        gm.Level = int32(i32)
 	}
 	gm.Facility = q.Get("facility")
 	gm.File = q.Get("file")
@@ -221,7 +210,7 @@ func decompress(r io.Reader) (rc io.ReadCloser, err error) {
 	return
 }
 
-// unbox gelf message: decompress and decode from JSON
+// UnboxGelf unboxes a GELF message: decompress and decode from JSON
 func UnboxGelf(rc io.ReadCloser, m *gelf.Message) (err error) {
 	var r io.ReadCloser
 	if r, err = decompress(rc); err != nil {

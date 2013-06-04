@@ -1,18 +1,7 @@
-/*
-   Copyright 2013 Tamás Gulácsi
+// Copyright 2013 Tamás Gulácsi. All rights reserved.
+// Use of this source code is governed by an Apache 2.0
+// license that can be found in the LICENSE file.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
 package loglib
 
 import (
@@ -24,12 +13,15 @@ import (
 	"strconv"
 )
 
+// ElasticSearchPathPrefix is the path prefix storing data in ElasticSearch
 const ElasticSearchPathPrefix = "/woodchuck/gelf"
 
+// StoreCh is the channel for messages to be stored
 var StoreCh chan *Message
 
+// ElasticSearch context
 type ElasticSearch struct {
-	Url    *url.URL
+	URL    *url.URL
 	client *http.Client
 }
 
@@ -44,12 +36,13 @@ type esResponse struct {
 	Ok      bool   `json:"ok"`
 	Index   string `json:"_index"`
 	Type    string `json:"_type"`
-	Id      string `json:"_id"`
+	ID      string `json:"_id"`
 	Version int    `json:"_version"`
 	Error   string `json:"error"`
 	Status  int    `json:"status"`
 }
 
+// NewElasticSearch returns a new ElasticSearch message store
 func NewElasticSearch(urls string, ttld int) *ElasticSearch {
 	u, err := url.Parse(urls)
 	if err != nil {
@@ -61,9 +54,10 @@ func NewElasticSearch(urls string, ttld int) *ElasticSearch {
 		q.Set("ttl", strconv.Itoa(ttld)+"d")
 		u.RawQuery = q.Encode()
 	}
-	return &ElasticSearch{Url: u, client: http.DefaultClient}
+	return &ElasticSearch{URL: u, client: http.DefaultClient}
 }
 
+// Store stores a message
 func (es ElasticSearch) Store(m *Message) (*esResponse, error) {
 	buf := bytes.NewBuffer(make([]byte, 0, 512))
 	_, _ = buf.Write([]byte(`{"gelf": `))
@@ -75,7 +69,7 @@ func (es ElasticSearch) Store(m *Message) (*esResponse, error) {
 		return nil, err
 	}
 	_, _ = buf.Write([]byte{'}'})
-	u := *es.Url
+	u := *es.URL
 	u.Path += ElasticSearchPathPrefix
 	if resp, err = es.client.Post(u.String(), "application/json",
 		bytes.NewReader(buf.Bytes())); err != nil {

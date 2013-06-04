@@ -1,18 +1,7 @@
-/*
-   Copyright 2013 Tamás Gulácsi
+// Copyright 2013 Tamás Gulácsi. All rights reserved.
+// Use of this source code is governed by an Apache 2.0
+// license that can be found in the LICENSE file.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
 package loglib
 
 import (
@@ -22,17 +11,29 @@ import (
 	"time"
 )
 
+// LogLevel is the logging level, copied from syslog
+type LogLevel int
+
 const (
-	EMERGENCY = iota
+	// EMERGENCY is the highest level
+	EMERGENCY = LogLevel(iota)
+	// ALERT is the alert level
 	ALERT
+	// CRITICAL syslog level
 	CRITICAL
+	// ERROR syslog level
 	ERROR
+	// WARNING syslog level
 	WARNING
+	// NOTICE syslog level
 	NOTICE
+	// INFO syslog level
 	INFO
+	// DEBUG syslog level
 	DEBUG
 )
 
+// LevelNames is the names of the levels
 var LevelNames = [8]string{"EMERGENCY", "ALERT", "CRITICAL", "ERROR",
 	"WARNING", "NOTICE", "INFO", "DEBUG"}
 
@@ -50,33 +51,45 @@ var LevelNames = [8]string{"EMERGENCY", "ALERT", "CRITICAL", "ERROR",
 //    Line     int                    `json:"line"`
 //    Extra    map[string]interface{} `json:"-"`
 //}
+
+// Message is a gelf.Message wrapper
 type Message gelf.Message
 
+// MarshalJSON returns the message marshaled to JSON
 func (m *Message) MarshalJSON() ([]byte, error) {
 	return ((*gelf.Message)(m)).MarshalJSON()
 }
+
+// UnmarshalJSON unmarshals JSON into the message
 func (m *Message) UnmarshalJSON(data []byte) error {
 	return ((*gelf.Message)(m)).UnmarshalJSON(data)
 }
+
+// String returns a short representation of the message
 func (m *Message) String() string {
 	return fmt.Sprintf("%s %s@%s: %s", LevelNames[m.Level], m.Facility, m.Host,
 		m.Short)
 }
+
+// Long returns a short representation of the message
 func (m *Message) Long() string {
 	return fmt.Sprintf("%s\n%s\n%s:%d\n\n%s", m.String(),
 		time.Unix(m.TimeUnix, 0).Format(time.RFC3339), m.File, m.Line, m.Full)
 }
 
-func FromGelfJson(text []byte, m *Message) error {
+// FromGelfJSON reads the GELF JSON into the message
+func FromGelfJSON(text []byte, m *Message) error {
 	return json.Unmarshal(text, m)
 }
 
+// AsMessage is a type conversion + some fixes
 func AsMessage(gm *gelf.Message) *Message {
 	m := (*Message)(gm)
 	m.Fix()
 	return m
 }
 
+// Fix fixes some GELF quirks (_full_message => Full)
 func (m *Message) Fix() {
 	if m.Extra != nil && m.Full == "" {
 		if f, ok := m.Extra["_full_message"]; ok {

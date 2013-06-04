@@ -1,18 +1,8 @@
-/*
-   Copyright 2013 Tamás Gulácsi
+// Copyright 2013 Tamás Gulácsi. All rights reserved.
+// Use of this source code is governed by an Apache 2.0
+// license that can be found in the LICENSE file.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
+// Package loglib implements some remote logging mechanisms
 package loglib
 
 import (
@@ -23,11 +13,12 @@ import (
 )
 
 var (
+	//TransportConfig is the configset for transportation settings
 	TransportConfig = config.NewConfigSet("transportation settings", config.ExitOnError)
 	from            = TransportConfig.String("from", "woodchuck")
 	gelfUdpPort     = TransportConfig.Int("gelf.udp", 12201)
 	gelfTcpPort     = TransportConfig.Int("gelf.tcp", 0)
-	gelfHttpPort    = TransportConfig.Int("gelf.http", 0)
+	gelfHTTPPort    = TransportConfig.Int("gelf.http", 0)
 
 	twilioSid   = TransportConfig.String("twilio.sid", "")
 	twilioToken = TransportConfig.String("twilio.token", "")
@@ -40,25 +31,33 @@ var (
 	mantisXmlrpc = TransportConfig.String("mantis.xmlrpc", "xmlrpc_vv.php")
 	mantisRate   = TransportConfig.Int("mantis.rate", 3600)
 
-	esUrl = TransportConfig.String("elasticsearch.url", "http://localhost:9200")
+	esURL = TransportConfig.String("elasticsearch.url", "http://localhost:9200")
 	esTTL = TransportConfig.Int("elasticsearch.ttl", 90)
 )
 
+// SMSSender is the SMS sender interface (just to and from)
 type SMSSender interface {
 	Send(to, message string) error
 }
+
+// EmailSender is the email sender interface (multiple to, a subject and a []byte body)
 type EmailSender interface {
 	Send(to []string, subject string, body []byte) error
 }
+
+// MantisSender is an interface for an issue tracker injector
 type MantisSender interface {
 	Send(uri, subject, body string) (int, error)
 }
+
+// SenderProvider is an interface for returning the specific senders
 type SenderProvider interface {
 	GetSMSSender(string) SMSSender
 	GetEmailSender(string) EmailSender
 	GetMantisSender(string) MantisSender
 }
 
+// Server is the server context
 type Server struct {
 	in, store chan *Message
 	sms       SMSSender
@@ -74,18 +73,23 @@ type Server struct {
 	}
 }
 
+// GetSMSSender returns the SMSSender, implementing rate limiting
 func (s Server) GetSMSSender(txt string) SMSSender {
 	if s.rates.limiter != nil && s.rates.sms > 0 && !s.rates.limiter.Put(s.rates.sms, txt) {
 		return nil
 	}
 	return s.sms
 }
+
+// GetEmailSender returns the EmailSender, if not above rate limit
 func (s Server) GetEmailSender(txt string) EmailSender {
 	if s.rates.limiter != nil && s.rates.email > 0 && !s.rates.limiter.Put(s.rates.email, txt) {
 		return nil
 	}
 	return s.email
 }
+
+// GetMantisSender returns the MantisSender, if not above rate limit
 func (s Server) GetMantisSender(txt string) MantisSender {
 	if s.rates.limiter != nil && s.rates.mantis > 0 && !s.rates.limiter.Put(s.rates.mantis, txt) {
 		return nil
@@ -93,6 +97,7 @@ func (s Server) GetMantisSender(txt string) MantisSender {
 	return s.mantis
 }
 
+// LoadConfig loads the config read from the transports and filters TOML files
 func LoadConfig(transports, filters string) (s *Server, err error) {
 	log.Printf("loading transports config file %s", filters)
 	if err = TransportConfig.Parse(transports); err != nil {
@@ -100,11 +105,11 @@ func LoadConfig(transports, filters string) (s *Server, err error) {
 	}
 	s = &Server{routines: make([]func(), 0, 4), in: make(chan *Message)}
 	s.rates.limiter = NewRateLimiter(time.Hour)
-	if *esUrl != "" {
-		log.Printf("starting storage goroutine for %s", *esUrl)
+	if *esURL != "" {
+		log.Printf("starting storage goroutine for %s", *esURL)
 		s.store = make(chan *Message)
 		s.routines = append(s.routines, func() {
-			storeEs(*esUrl, *esTTL, s.store)
+			storeEs(*esURL, *esTTL, s.store)
 		})
 	}
 	if *twilioSid != "" {
@@ -119,17 +124,17 @@ func LoadConfig(transports, filters string) (s *Server, err error) {
 	s.rates.mantis = time.Duration(*mantisRate) * time.Second
 	if *gelfUdpPort > 0 {
 		s.routines = append(s.routines, func() {
-			ListenGelfUdp(*gelfUdpPort, s.in)
+			ListenGelfUDP(*gelfUdpPort, s.in)
 		})
 	}
 	if *gelfTcpPort > 0 {
 		s.routines = append(s.routines, func() {
-			ListenGelfTcp(*gelfTcpPort, s.in)
+			ListenGelfTCP(*gelfTcpPort, s.in)
 		})
 	}
-	if *gelfHttpPort > 0 {
+	if *gelfHTTPPort > 0 {
 		s.routines = append(s.routines, func() {
-			ListenGelfHttp(*gelfHttpPort, s.in)
+			ListenGelfHTTP(*gelfHTTPPort, s.in)
 		})
 	}
 

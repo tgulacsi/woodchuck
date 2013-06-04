@@ -1,18 +1,7 @@
-/*
-   Copyright 2013 Tamás Gulácsi
+// Copyright 2013 Tamás Gulácsi. All rights reserved.
+// Use of this source code is governed by an Apache 2.0
+// license that can be found in the LICENSE file.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
 package loglib
 
 import (
@@ -22,6 +11,7 @@ import (
 	"strings"
 )
 
+// Matcher is an interface for message filtering (matching)
 type Matcher interface {
 	Match(m *Message) bool
 }
@@ -31,6 +21,7 @@ type reFilter struct {
 	Re    *regexp.Regexp
 }
 
+// Match returns whether the message matches some filtering regexp rule
 func (f reFilter) Match(m *Message) (b bool) {
 	var v string
 	switch f.Field {
@@ -50,6 +41,7 @@ type rangeFilter struct {
 	Threshold int64
 }
 
+// Match returns whether the message matches some range rule
 func (f rangeFilter) Match(m *Message) (b bool) {
 	var v int64
 	switch f.Field {
@@ -66,6 +58,7 @@ func (f rangeFilter) Match(m *Message) (b bool) {
 	return
 }
 
+// ConfigTree is an interface for configuration tree (think TOML)
 type ConfigTree interface {
 	// Get the value at key in the TomlTree. Key is a dot-separated path (e.g. a.b.c). Returns nil if the path does not exist in the tree.
 	Get(key string) interface{}
@@ -73,6 +66,7 @@ type ConfigTree interface {
 	Keys() []string
 }
 
+// BuildMatchers builds the matchers from the configuration
 func BuildMatchers(tree ConfigTree) (matchers map[string]Matcher, err error) {
 	tree = getSubtree(tree, "filters")
 	keys := tree.Keys()
@@ -138,6 +132,7 @@ func getList(tree ConfigTree, name string) (arr []string) {
 	return
 }
 
+// Alerter is a message sender interface
 type Alerter interface {
 	Send(*Message, SenderProvider) error
 }
@@ -146,6 +141,7 @@ type emailAlert struct {
 	To []string
 }
 
+// Send sends the message, retrieving the EmailSender from the SenderProvider
 func (a emailAlert) Send(m *Message, s SenderProvider) error {
 	sender := s.GetEmailSender(strings.Join(a.To, ";") + "#" + m.String())
 	if sender != nil {
@@ -158,6 +154,7 @@ type smsAlert struct {
 	To []string
 }
 
+// Send sends the message, retrieving the SMSSender from the SenderProvider
 func (a smsAlert) Send(m *Message, s SenderProvider) error {
 	var err error
 	errs := make([]string, 0, len(a.To))
@@ -180,6 +177,7 @@ type mantisAlert struct {
 	Uri string
 }
 
+// Send sends the message, retrieving the MantisSender from the SenderProvider
 func (a mantisAlert) Send(m *Message, s SenderProvider) error {
 	sender := s.GetMantisSender(a.Uri + "#" + m.String())
 	if sender == nil {
@@ -192,6 +190,7 @@ func (a mantisAlert) Send(m *Message, s SenderProvider) error {
 	return err
 }
 
+// BuildAlerters builds the alerters map from the config tree
 func BuildAlerters(tree ConfigTree) (destinations map[string]Alerter, err error) {
 	tree = getSubtree(tree, "destinations")
 	keys := tree.Keys()
@@ -202,7 +201,7 @@ func BuildAlerters(tree ConfigTree) (destinations map[string]Alerter, err error)
 	destinations = make(map[string]Alerter, len(keys))
 	var (
 		sub ConfigTree
-		to  []string = make([]string, 0, 1)
+		to  = make([]string, 0, 1)
 		v   interface{}
 	)
 
@@ -222,13 +221,15 @@ func BuildAlerters(tree ConfigTree) (destinations map[string]Alerter, err error)
 	return
 }
 
+// Rule has a name, some conditions (If) and some consequences (Then)
+// The If Matchers chained with AND
 type Rule struct {
 	Name string
 	If   []Matcher
 	Then []Alerter
 }
 
-// AND-match
+// Match AND-matches all If conditions
 func (rul Rule) Match(m *Message) bool {
 	if len(rul.If) == 0 {
 		return false
@@ -241,6 +242,8 @@ func (rul Rule) Match(m *Message) bool {
 	return true
 }
 
+// Do does what the Then consequences contain.
+// returns all consequenses, joined
 func (rul Rule) Do(m *Message, s SenderProvider) (err error) {
 	if len(rul.Then) == 0 {
 		return
@@ -257,6 +260,7 @@ func (rul Rule) Do(m *Message, s SenderProvider) (err error) {
 	return errors.New(strings.Join(errs, "\n"))
 }
 
+// BuildRules builds the rules from the config and the already compiled matchers and alerters
 func BuildRules(tree ConfigTree, matchers map[string]Matcher, alerters map[string]Alerter) (rules []Rule, err error) {
 	tree = getSubtree(tree, "rules")
 	keys := tree.Keys()
