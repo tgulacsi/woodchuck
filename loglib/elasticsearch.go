@@ -7,10 +7,12 @@ package loglib
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 // ElasticSearchPathPrefix is the path prefix storing data in ElasticSearch
@@ -60,7 +62,9 @@ func NewElasticSearch(urls string, ttld int) *ElasticSearch {
 // Store stores a message
 func (es ElasticSearch) Store(m *Message) (*esResponse, error) {
 	buf := bytes.NewBuffer(make([]byte, 0, 512))
-	_, _ = buf.Write([]byte(`{"gelf": `))
+	_, _ = io.WriteString(buf, `{"@timestamp": "`)
+	_, _ = io.WriteString(buf, time.Unix(m.TimeUnix, 0).Format(time.RFC3339))
+	_, _ = io.WriteString(buf, `", "gelf": `)
 	var (
 		resp *http.Response
 		err  error

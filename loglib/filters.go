@@ -31,7 +31,7 @@ func (f reFilter) Match(m *Message) (b bool) {
 		v = m.Facility
 	}
 	b = f.Re.MatchString(v)
-	log.Printf("M %s=%s ?%s: %b", f.Field, v, f.Re, b)
+	log.Printf("M %s=%s ?%s: %t", f.Field, v, f.Re, b)
 	return
 }
 
@@ -54,7 +54,7 @@ func (f rangeFilter) Match(m *Message) (b bool) {
 		b = v < f.Threshold
 	}
 	b = v == f.Threshold
-	log.Printf("M %s=%d ?%d %d: %b", f.Field, v, f.sign, f.Threshold, b)
+	log.Printf("M %s=%d ?%d %d: %t", f.Field, v, f.sign, f.Threshold, b)
 	return
 }
 

@@ -24,7 +24,7 @@ func NewTwilio(from, sid, token string) twilioClient {
 func (tc twilioClient) Send(to, message string) error {
 	_, exc, err := tc.client.SendSMS(tc.from, to, message, "", "")
 	if err == nil && exc != nil {
-		return fmt.Errorf("%s: %s\n%s", exc.Message, exc.Code, exc.MoreInfo)
+		return fmt.Errorf("%s: %d\n%s", exc.Message, exc.Code, exc.MoreInfo)
 	}
 	return nil
 }

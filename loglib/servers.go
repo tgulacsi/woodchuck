@@ -37,8 +37,6 @@ func ListenGelfUDP(port int, ch chan<- *Message) error {
 		}
 		ch <- AsMessage(gm)
 	}
-	log.Fatalf("stopped listening UDP on %d", port)
-	return nil
 }
 
 var (
@@ -71,8 +69,6 @@ func ListenGelfTCP(port int, ch chan<- *Message) error {
 		}
 		go handle(conn)
 	}
-	log.Fatalf("End listening TCP on %d", port)
-	return nil
 }
 
 // ListenGelfHTTP listens on the given HTTP port for multipart/form POST
@@ -167,7 +163,7 @@ func parseValues(q url.Values, gm *gelf.Message) (err error) {
 		if i32, err = strconv.Atoi(s); err != nil {
 			return fmt.Errorf("error parsing level %s: %s", q.Get("level"), err)
 		}
-        gm.Level = int32(i32)
+		gm.Level = int32(i32)
 	}
 	gm.Facility = q.Get("facility")
 	gm.File = q.Get("file")
